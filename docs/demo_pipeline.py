@@ -12,20 +12,18 @@
 
 import os.path as osp
 import numpy as np
-import pandas as pd
 import pathlib, sys, os, random, time
 import numba, cv2, gc
-from tqdm import tqdm
+from tqdm import tqdm_notebook
+import glob
 
 import matplotlib.pyplot as plt
-
 import warnings
 warnings.filterwarnings('ignore')
 
 from tqdm.notebook import tqdm
 
 import albumentations as A
-import glob
 
 import torch
 import torch.nn as nn
@@ -35,12 +33,18 @@ torch.backends.cudnn.enabled = True
 
 import torchvision
 from torchvision import transforms as T
-import glob
+from PIL import Image
 
-EPOCHES = 20
+DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
+
+### global variable
+
+NUM_FOLD = 7
+EPOCHES = 24
 BATCH_SIZE = 8
 IMAGE_SIZE = 256
-DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
 
 trfm = A.Compose([
     A.Resize(IMAGE_SIZE, IMAGE_SIZE),
@@ -122,24 +126,22 @@ def train(dataset):
     #          Epoch         metrics            time
     raw_line = '{:6d}' + '\u2502{:7.3f}' * 2 + '\u2502{:6.2f}'
     print(header)
-    class_name = ['farm', 'land', 'forest', 'grass', 'road', 'urban_area',
+    class_name = ['farm_land', 'forest', 'grass', 'road', 'urban_area',
                   'countryside', 'industrial_land', 'construction',
                   'water', 'bareland']
     print('  '.join(class_name))
 
-    val_idx, train_idx = [], []
+    valid_idx, train_idx = [], []
 
-    ### 5 flod validataion
-    for fold_idx in range(0, 5):
+    for fold_idx in range(NUM_FOLD):
         for i in range(len(dataset)):
-            if i % 5 == fold_idx:
-                val_idx.append(i)
+            if i % NUM_FOLD == fold_idx:
+                valid_idx.append(i)
             else:
-                #     elif i % 7 == 1:
                 train_idx.append(i)
 
         train_ds = D.Subset(dataset, train_idx)
-        valid_ds = D.Subset(dataset, val_idx)
+        valid_ds = D.Subset(dataset, valid_idx)
 
         # define training and validation data loaders
         loader = D.DataLoader(
@@ -155,7 +157,6 @@ def train(dataset):
             in_channels=3,  # model input channels (1 for grayscale images, 3 for RGB, etc.)
             classes=10,  # model output channels (number of classes in your dataset)
         )
-        model.train()
         model.to(DEVICE)
         optimizer = torch.optim.AdamW(model.parameters(),
                                       lr=1e-4, weight_decay=1e-3)
@@ -165,12 +166,13 @@ def train(dataset):
         for epoch in range(1, EPOCHES + 1):
             losses = []
             start_time = time.time()
-
-            pbar = tqdm(loader)
-            for image, target in tqdm(loader):
+            model.train()
+            model.to(DEVICE);
+            for image, target in tqdm_notebook(loader):
                 image, target = image.to(DEVICE), target.to(DEVICE)
                 optimizer.zero_grad()
                 output = model(image)
+
                 # break
                 loss = loss_fn(output, target)
                 loss.backward()
@@ -186,6 +188,9 @@ def train(dataset):
             if best_iou < np.stack(viou).mean(0).mean():
                 best_iou = np.stack(viou).mean(0).mean()
                 torch.save(model.state_dict(), 'model_{0}.pth'.format(fold_idx))
+
+        torch.save(model.state_dict(), 'latest.pth'.format(fold_idx))
+
         break
 
 
@@ -211,16 +216,19 @@ def test(dataset):
     )
     model.eval()
     model.to(DEVICE)
-    model.load_state_dict(torch.load("./model_0.pth"))
+    model.load_state_dict(torch.load("./latest.pth"))
+
 
     for idx, name in enumerate(tqdm(dataset)):
-        image = cv2.imread(name)
+        img = cv2.imread(name)
+        image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         image = trfm(image)
         image_batch = torch.unsqueeze(image, dim=0)
         with torch.no_grad():
             image = image_batch.to(DEVICE)
             score1 = model(image).cpu().numpy()
 
+            b = torch.flip(image, [0, 3])
             score2 = model(torch.flip(image, [0, 3]))
             #         score2 = score2.cpu().numpy()
             score2 = torch.flip(score2, [3, 0]).cpu().numpy()
@@ -232,23 +240,10 @@ def test(dataset):
             score = (score1 + score2 + score3) / 3.0
 
             score_sigmoid = score[0].argmax(0) + 1
-            #         score_sigmoid = (score_sigmoid > 0.5).astype(np.uint8)
 
-            #         plt.figure(figsize=(16,8))
-            #         plt.subplot(151)
-            #         plt.imshow((score1[0].argmax(0) + 1)*30, cmap='gray')
-            #         plt.subplot(152)
-            #         plt.imshow((score2[0].argmax(0) + 1)*30, cmap='gray')
-            #         plt.subplot(153)
-            #         plt.imshow((score3[0].argmax(0) + 1)*30, cmap='gray')
-            #         plt.subplot(154)
-            #         plt.imshow((score[0].argmax(0) + 1)*30, cmap='gray')
-            #         plt.subplot(155)
-            #         image = cv2.imread(name)
-            #         plt.imshow(image);
-
-            # break
             print(score_sigmoid.min(), score_sigmoid.max())
+
+            os.makedirs('results', exist_ok=True)
             cv2.imwrite('results/' + name.split('/')[-1].replace('.tif', '.png'), score_sigmoid)
         # break
 
@@ -260,7 +255,6 @@ def main():
         glob.glob(osp.join(dataset_path, 'suichang_round1_train_210120', '*.tif')),
         trfm, False
     )
-
 
     test_dataset = glob.glob(osp.join(dataset_path, 'suichang_round1_test_partA_210120', '*.tif')[:])
     # visualize mask
