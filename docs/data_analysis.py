@@ -25,49 +25,9 @@ from collections import Counter
 from tqdm import tqdm
 import pandas as pd
 
-
-def get_palette():
-    """
-
-    :return:
-    """
-    palette=[]
-    for i in range(256):
-        palette.extend((i,i,i))
-
-    color_array = np.array([[0, 0, 0],  # other
-                            [177, 191, 122],  # farm_land
-                            [0, 128, 0],  # forest
-                            [128, 168, 93],  # grass
-                            [62, 51, 0],  # road
-                            [128, 128, 0],  # urban_area
-                            [128, 128, 128],  # countryside
-                            [192, 128, 0],  # industrial_land
-                            [0, 128, 128],  # construction
-                            [132, 200, 173],  # water
-                            [128, 64, 0]],  # bareland
-                           dtype='uint8')
-
-    palette[:3*11]=color_array.flatten()
-
-    return palette
+from misc.visual import get_palette, show_palette, convert_img_mode, visual_mask
 
 
-# for afile in files:
-#     file_path=os.path.join(path,afile)
-#     if os.path.isfile(file_path):
-#         if os.path.getsize(file_path)==0:
-#             continue
-#         mat_idx=afile[:afile.find('.mat')]
-#         mat_file=sio(file_path)
-#         mat_file=mat_file['data']
-#         labels=np.argmax(mat_file,axis=2).astype(np.uint8)
-#         label_img=Image.fromarray(labels.reshape(labels.shape[0],labels.shape[1]))
-#         label_img.putpalette(palette)
-#         label_img=label_img.transpose(Image.FLIP_LEFT_RIGHT)
-#         label_img = label_img.rotate(90)
-#         dst_path=os.path.join(labels_path,mat_idx+'.png')
-#         label_img.save(dst_path)
 
 
 def check_visual_image(img_path):
@@ -95,49 +55,12 @@ def check_visual_image(img_path):
     # plt.show()
     return rgb_img
 
-def show_palette(palette, cat_label:dict):
-    """
-
-    :param palette:
-    :param cat_label:
-    :return:
-    """
-    fig, axs = plt.subplots(nrows=2, ncols=5, figsize=(12, 4),
-                            subplot_kw={'xticks': [], 'yticks': []})
-
-    for cat, label in cat_label.items():
-
-        cat_palette = np.ones((4, 6, 3), dtype=np.int32) * np.array([palette[label*3: (label+1)*3]])
-
-        axs.flat[label-1].imshow(cat_palette)
-        axs.flat[label-1].set_title(cat, size=14)
-
-    plt.show()
 
 
-def convert_img_mode(img_path):
-    """
-
-    :param img_path:
-    :return:
-    """
-    raw_img = Image.open(img_path)
-    rgb_img = raw_img.convert(mode='RGB')
-
-    return rgb_img
 
 
-def visual_mask(mask_path, palette):
-    """
 
-    :param mask_path:
-    :param palette:
-    :return:
-    """
-    mask_img = Image.open(mask_path)
-    mask_img.putpalette(palette)
 
-    return mask_img
 
 
 def visual_dataset(image_dataset, mask_dataset, palette, num_row=2, num_col=6):
@@ -158,7 +81,7 @@ def visual_dataset(image_dataset, mask_dataset, palette, num_row=2, num_col=6):
     for index, (img_path, mask_path) in enumerate(zip(img_data, mask_data)):
 
         rgb_img = convert_img_mode(img_path)
-        mask_img = visual_mask(mask_path, palette)
+        mask_img = visual_mask(mask_path=mask_path)
 
         img_name = os.path.basename(img_path).split('.')[0]
         axs.flat[index].imshow(rgb_img)
@@ -242,7 +165,7 @@ def main():
 
 
     for mask_path in train_mask:
-        visual_mask(mask_path, palette)
+        visual_mask(mask_path=mask_path)
 
     visual_dataset(train_image, train_mask, palette)
 
