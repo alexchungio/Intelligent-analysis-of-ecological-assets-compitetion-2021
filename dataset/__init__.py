@@ -10,4 +10,6 @@
 # @ Software   : PyCharm
 #-------------------------------------------------------
 
-from transformers import *
+from .transforms import *
+from .EcologicalDataset import EcologicalDataset
+from .RSCDataset import  RSCDataset

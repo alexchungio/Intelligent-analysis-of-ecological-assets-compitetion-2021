@@ -72,7 +72,7 @@ class TianChiDataset(D.Dataset):
                         [0.131, 0.177, 0.101]),
         ])
 
-    # get data operation
+    # get dataset operation
     def __getitem__(self, index):
         img = cv2.imread(self.paths[index])
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -146,7 +146,7 @@ def train(dataset):
         train_ds = D.Subset(dataset, train_idx)
         valid_ds = D.Subset(dataset, valid_idx)
 
-        # define training and validation data loaders
+        # define training and validation dataset loaders
         loader = D.DataLoader(
             train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
 

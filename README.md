@@ -5,6 +5,12 @@
 ## EDA
 [data analysis](./docs/data_analysis.ipynb)
 
+## requirements
+* segmentation-models-pytorch
+```shell script
+pip install git+https://github.com/qubvel/segmentation_models.pytorch
+```
+
 ## Train
 
 ## inference
@@ -31,4 +37,4 @@ zip -r results.zip results
 
 * <https://tianchi.aliyun.com/notebook-ai/detail?spm=5176.12586969.1002.3.6cc26423XSMkYs&postId=169396>
 * <https://github.com/MrGiovanni/UNetPlusPlus>
-* <https://aistudio.baidu.com/aistudio/projectdetail/1465819?spm=5176.12282029.0.0.56951df1MUxsWK>
+* <https://github.com/DLLXW/data-science-competition/tree/main/%E5%A4%A9%E6%B1%A0/2021%E5%85%A8%E5%9B%BD%E6%95%B0%E5%AD%97%E7%94%9F%E6%80%81%E5%88%9B%E6%96%B0%E5%A4%A7%E8%B5%9B-%E9%AB%98%E5%88%86%E8%BE%A8%E7%8E%87%E9%81%A5%E6%84%9F%E5%BD%B1%E5%83%8F%E5%88%86%E5%89%B2>

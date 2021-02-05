@@ -30,10 +30,36 @@ import torchvision
 import random
 from PIL import Image, ImageFilter
 from torchvision import transforms
-import albumentations as albu
+import albumentations as A
 from torchvision import transforms as T
 
-__all__ = ['get_transforms', 'get_albu_transform']
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+
+__all__ = ['get_transforms', 'get_albu_transform', 'train_transform', 'val_transform']
+
+
+
+train_transform = A.Compose([
+    # reszie
+    A.Resize(256, 256),
+    #
+    A.OneOf([
+        A.VerticalFlip(p=0.5),
+        A.HorizontalFlip(p=0.5),
+        A.RandomRotate90(p=0.5),
+        A.Transpose(p=0.5)
+    ]),
+    A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+    ToTensorV2(),
+])
+
+
+val_transform = A.Compose([
+    A.Resize(256, 256),
+    A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+    ToTensorV2(),
+])
 
 
 
@@ -43,11 +69,11 @@ def get_albu_transform(image_size):
     :param image_size:
     :return:
     """
-    albu_transform = albu.Compose([
-                                albu.Resize(image_size, image_size),
-                                albu.HorizontalFlip(p=0.5),
-                                albu.VerticalFlip(p=0.5),
-                                albu.RandomRotate90(),
+    albu_transform = A.Compose([
+                                A.Resize(image_size, image_size),
+                                A.HorizontalFlip(p=0.5),
+                                A.VerticalFlip(p=0.5),
+                                A.RandomRotate90(),
                             ])
 
     return albu_transform
