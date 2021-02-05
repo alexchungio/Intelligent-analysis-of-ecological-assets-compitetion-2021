@@ -9,7 +9,22 @@
 
 ## inference
 
+## submit
+
+```shell script
+zip -r results.zip results
+```
+
 ## Logs
+
+### 2020-02-05
+
+* 修改代码中bug(test 中图像格式需要从BGR 转换为 RGB)
+  线上测试 0.3406
+
+* 增加 re-weight 策略
+  线上分数 0.3511
+   
 
 
 ## Reference

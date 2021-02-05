@@ -39,9 +39,8 @@ DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 
 ### global variable
-
 NUM_FOLD = 7
-EPOCHES = 24
+EPOCHES = 30
 BATCH_SIZE = 8
 IMAGE_SIZE = 256
 
@@ -52,6 +51,10 @@ trfm = A.Compose([
     A.VerticalFlip(p=0.5),
     A.RandomRotate90(),
 ])
+
+
+class_weights = torch.tensor([0.25430845,  0.24128766, 0.72660323, 0.57558217, 0.74196072, 0.56340895, 0.76608468, 0.80792181, 0.47695224, 1.],
+                             dtype=torch.float32)
 
 
 class TianChiDataset(D.Dataset):
@@ -159,15 +162,16 @@ def train(dataset):
         )
         model.to(DEVICE)
         optimizer = torch.optim.AdamW(model.parameters(),
-                                      lr=1e-4, weight_decay=1e-3)
-        loss_fn = nn.CrossEntropyLoss().to(DEVICE);
+                                      lr=0.00025, weight_decay=1e-4)
+        lr_schedule = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 25], gamma=0.1)
+        loss_fn = nn.CrossEntropyLoss(weight=class_weights).to(DEVICE)
 
         best_iou = 0
         for epoch in range(1, EPOCHES + 1):
             losses = []
             start_time = time.time()
             model.train()
-            model.to(DEVICE);
+            model.to(DEVICE)
             for image, target in tqdm_notebook(loader):
                 image, target = image.to(DEVICE), target.to(DEVICE)
                 optimizer.zero_grad()
@@ -181,6 +185,9 @@ def train(dataset):
                 losses.append(loss.item())
 
             viou = validation(model, vloader, loss_fn)
+
+            lr_schedule.step()
+
             print('\t'.join(np.stack(viou).mean(0).round(3).astype(str)))
 
             print(raw_line.format(epoch, np.array(losses).mean(), np.mean(viou),
@@ -189,7 +196,7 @@ def train(dataset):
                 best_iou = np.stack(viou).mean(0).mean()
                 torch.save(model.state_dict(), 'model_{0}.pth'.format(fold_idx))
 
-        torch.save(model.state_dict(), 'latest.pth'.format(fold_idx))
+        torch.save(model.state_dict(), '20210204_latest.pth'.format(fold_idx))
 
         break
 
@@ -216,7 +223,7 @@ def test(dataset):
     )
     model.eval()
     model.to(DEVICE)
-    model.load_state_dict(torch.load("./latest.pth"))
+    model.load_state_dict(torch.load("./20210204_latest.pth"))
 
 
     for idx, name in enumerate(tqdm(dataset)):
