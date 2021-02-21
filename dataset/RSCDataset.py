@@ -1,33 +1,21 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#------------------------------------------------------
-# @ File       : RSCDataset.py
-# @ Description:  
-# @ Author     : Alex Chung
-# @ Contact    : yonganzhong@outlook.com
-# @ License    : Copyright (c) 2017-2018
-# @ Time       : 2021/2/5 下午8:30
-# @ Software   : PyCharm
-#-------------------------------------------------------
-
 import os
 import cv2
 import logging
 import numpy as np
-from glob import glob
-import os.path as osp
-import glob
+
+
 from PIL import Image
+from tqdm import tqdm
+from glob import glob
+from torch.utils.data import Dataset
+
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-
-import torch.utils.data as data
-
+import matplotlib.colors as colors
 
 from dataset.transforms import train_transform, val_transform
 
-
-
-class RSCDataset(data.Dataset):
+class RSCDataset(Dataset):
     def __init__(self, imgs_dir, masks_dir, transform=None):
         self.imgs_dir = imgs_dir
         self.masks_dir = masks_dir
@@ -45,12 +33,9 @@ class RSCDataset(data.Dataset):
         if len(img_nd.shape) == 2:
             img_nd = np.expand_dims(img_nd, axis=2)
         try:
-            # img_trans = img_nd.transpose(2, 0, 1)
-            img_trans = img_nd.transpose((2, 0, 1))
+            img_trans = img_nd.transpose(2, 0, 1)
         except:
             print(img_nd.shape)
-
-        # normalize
         if img_trans.max() > 1: img_trans = img_trans / 255
         return img_trans
 
@@ -73,9 +58,11 @@ class RSCDataset(data.Dataset):
             'label': mask.long()
         }
 
-def main():
-    pass
+if __name__ == '__main__':
+    data_dir = os.path.join('/media/alex/80CA308ECA308288/alex_dataset/ecological-assets', 'split_dataset')
+    train_imgs_dir = os.path.join(data_dir, "img_dir/train/")
+    train_labels_dir = os.path.join(data_dir, "ann_dir/train/")
 
+    train_data = RSCDataset(train_imgs_dir, train_labels_dir, transform=train_transform)
 
-if __name__ == "__main__":
-    pass
+    print(train_data)

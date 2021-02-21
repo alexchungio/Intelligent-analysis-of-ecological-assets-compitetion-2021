@@ -26,15 +26,39 @@ zip -r results.zip results
 ### 2020-02-05
 
 * 修改代码中bug(test 中图像格式需要从BGR 转换为 RGB)
-  线上测试 0.3406
+  线上分数 0.3406
 
 * 增加 re-weight 策略
   线上分数 0.3511 （线下验证集 miou 分数下降， 线上分数反而提高了， 可能是因为训练集和测试的数据分布不同导致的）
    
+### 2020-02-06
+* 更换baseline  efficient+unet
+  线上分数 0.3712
+  
+  
+### 2020-02-09
+* 增大epoch
+  线上分数 0.3768
+   
+### 2020-02-18
+* 增加 re-weight 策略
+  
+  不 wrok
+  
+### trick
+* warmup
+* re-weight
+* re-sample
+* dice loss
+* CosineAnnealingWarmRestarts
+* data augmentation
+* TTA
+* 针对 grass、construction、 bareland 训练二分类模型
+* SWA(Stochastic Weights Averaging)
 
 
 ## Reference
 
 * <https://tianchi.aliyun.com/notebook-ai/detail?spm=5176.12586969.1002.3.6cc26423XSMkYs&postId=169396>
 * <https://github.com/MrGiovanni/UNetPlusPlus>
-* <https://github.com/DLLXW/data-science-competition/tree/main/%E5%A4%A9%E6%B1%A0/2021%E5%85%A8%E5%9B%BD%E6%95%B0%E5%AD%97%E7%94%9F%E6%80%81%E5%88%9B%E6%96%B0%E5%A4%A7%E8%B5%9B-%E9%AB%98%E5%88%86%E8%BE%A8%E7%8E%87%E9%81%A5%E6%84%9F%E5%BD%B1%E5%83%8F%E5%88%86%E5%89%B2>
+* <https://github.com/DLLXW/data-science-competition>

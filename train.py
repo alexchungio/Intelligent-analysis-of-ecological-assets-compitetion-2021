@@ -83,7 +83,7 @@ def eval(model, valid_loader, criterion, epoch, loager):
         return valid_epoch_loss, mean_iu
 
 
-def train(param, model, train_data, valid_data, plot=False, device='cuda'):
+def train(param, model, train_data, valid_data, class_weights=None, plot=False, device='cuda'):
     """
 
     :param param:
@@ -103,6 +103,9 @@ def train(param, model, train_data, valid_data, plot=False, device='cuda'):
     step_size = param['step_size']
     momentum = param['momentum']
     weight_decay = param['weight_decay']
+
+    warmup_epochs = param['warmup_epochs']
+    milestones = param['milestones']
 
     disp_inter = param['disp_inter']
     save_inter = param['save_inter']
@@ -129,6 +132,8 @@ def train(param, model, train_data, valid_data, plot=False, device='cuda'):
     # criterion = nn.CrossEntropyLoss(reduction='mean').to(device)
     DiceLoss_fn = DiceLoss(mode='multiclass')
     SoftCrossEntropy_fn = SoftCrossEntropyLoss(smooth_factor=0.1)
+    CrossEntropyLoss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
+
     criterion = L.JointLoss(first=DiceLoss_fn, second=SoftCrossEntropy_fn,
                             first_weight=0.5, second_weight=0.5).cuda()
     logger = initial_logger(
@@ -229,6 +234,10 @@ def train(param, model, train_data, valid_data, plot=False, device='cuda'):
 
 def main():
 
+
+    class_weights = torch.tensor(
+        [0.25430845, 0.24128766, 0.72660323, 0.57558217, 0.74196072, 0.56340895, 0.76608468, 0.80792181, 0.47695224,
+         1.],dtype=torch.half)
     model_name = 'efficientnet-b6'  # xception
     n_class = 10
     model = EfficientUNet(model_name, n_class).cuda()
@@ -247,7 +256,7 @@ def main():
     # 参数设置
     param = {}
 
-    param['epochs'] = 30  # 训练轮数
+    param['epochs'] = 50  # 训练轮数
     param['batch_size'] = 6  # 批大小
     param['lr'] = 1e-2  # 学习率
     param['gamma'] = 0.2  # 学习率衰减系数
