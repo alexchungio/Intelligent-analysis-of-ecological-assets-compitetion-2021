@@ -50,6 +50,7 @@ zip -r results.zip results
 * re-weight
 * re-sample
 * dice loss
+* lovasz_loss
 * CosineAnnealingWarmRestarts
 * data augmentation
 * TTA
@@ -62,3 +63,4 @@ zip -r results.zip results
 * <https://tianchi.aliyun.com/notebook-ai/detail?spm=5176.12586969.1002.3.6cc26423XSMkYs&postId=169396>
 * <https://github.com/MrGiovanni/UNetPlusPlus>
 * <https://github.com/DLLXW/data-science-competition>
+* <https://github.com/tugstugi/pytorch-saltnet>
