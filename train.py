@@ -61,11 +61,11 @@ def eval(model, valid_loader, criterion, epoch, loager):
     valid_iter_loss = AverageMeter()
     iou = IOUMetric(10)
     with torch.no_grad():
-        for batch_idx, batch_samples in enumerate(valid_loader):
+        for batch_idx, batch_samples in enumerate(tqdm(valid_loader)):
             data, target = batch_samples['image'], batch_samples['label']
             data, target = Variable(data.to(device)), Variable(target.to(device))
             pred = model(data)
-            loss = criterion(pred, target)
+            loss = criterion(pred.float(), target)
             pred = pred.cpu().data.numpy()
             pred = np.argmax(pred, axis=1)
             iou.add_batch(pred, target.cpu().data.numpy())
