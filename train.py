@@ -28,7 +28,7 @@ from torch.cuda.amp import autocast, GradScaler  # need pytorch>1.6
 from pytorch_toolbelt import losses as L
 
 from utils.metric import IOUMetric
-from segmentation_models_pytorch.losses import DiceLoss, FocalLoss, SoftCrossEntropyLoss
+from segmentation_models_pytorch.losses import DiceLoss, FocalLoss, SoftCrossEntropyLoss, LovaszLoss
 
 from utils import AverageMeter, second2time, initial_logger, smooth
 
@@ -129,12 +129,16 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
     # scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=2, eta_min=1e-5,
                                                                      last_epoch=-1)
+    # warm_up_with_multistep_lr = lambda \
+    #     epoch: epoch / warmup_epochs if epoch <= warmup_epochs else gamma ** len(
+    #     [m for m in milestones if m <= epoch])
+    # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warm_up_with_multistep_lr)
     # criterion = nn.CrossEntropyLoss(reduction='mean').to(device)
     DiceLoss_fn = DiceLoss(mode='multiclass')
     SoftCrossEntropy_fn = SoftCrossEntropyLoss(smooth_factor=0.1)
     CrossEntropyLoss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
-
-    criterion = L.JointLoss(first=DiceLoss_fn, second=SoftCrossEntropy_fn,
+    Lovasz_fn = LovaszLoss(mode='multiclass')
+    criterion = L.JointLoss(first=Lovasz_fn, second=SoftCrossEntropy_fn,
                             first_weight=0.5, second_weight=0.5).cuda()
     logger = initial_logger(
         os.path.join(save_log_dir, time.strftime("%m-%d %H:%M:%S", time.localtime()) + '_' + model_name + '.log'))
@@ -234,7 +238,6 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
 
 def main():
 
-
     class_weights = torch.tensor(
         [0.25430845, 0.24128766, 0.72660323, 0.57558217, 0.74196072, 0.56340895, 0.76608468, 0.80792181, 0.47695224,
          1.],dtype=torch.half)
@@ -267,6 +270,8 @@ def main():
     param['save_inter'] = 4  # 保存间隔(epoch)
     param['iter_inter'] = 50  # 显示迭代间隔(batch)
     param['min_inter'] = 10
+    param['warmup_epochs'] = 2
+    param['milestones'] = [40, 50]
 
     param['model_name'] = model_name  # 模型名称
     param['save_log_dir'] = save_log_dir  # 日志保存路径
