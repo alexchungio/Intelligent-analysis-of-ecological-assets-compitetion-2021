@@ -19,16 +19,16 @@ from PIL import Image
 from tqdm import tqdm
 import glob
 import os
+from scipy.io import loadmat
 
-import segmentation_models_pytorch as smp
+
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from utils import colorEncode
 import torch.nn as nn
 from torch.cuda.amp import autocast
 
-from scipy.io import loadmat
-
+from model import EfficientUNetPlusPlus
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -83,7 +83,7 @@ def get_infer_transform():
     return transform
 
 
-def inference(img_dir):
+def inference(model, img_dir):
     transform=get_infer_transform()
     image = cv2.imread(img_dir, cv2.IMREAD_COLOR)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -99,53 +99,45 @@ def inference(img_dir):
     return pred+1
 
 
-class seg_qyl(nn.Module):
-    def __init__(self, model_name, n_class):
-        super().__init__()
-        self.model = smp.UnetPlusPlus(
-                encoder_name=model_name,        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-                encoder_weights="imagenet",     # use `imagenet` pretrained weights for encoder initialization
-                in_channels=3,                  # model input channels (1 for grayscale images, 3 for RGB, etc.)
-                classes=n_class,                      # model output channels (number of classes in your dataset)
-            )
 
-    @autocast()
-    def forward(self, x):
-        #with autocast():
-        x = self.model(x)
-        return x
-
-
-if __name__=="__main__":
+def main():
 
     dataset_path = '/media/alex/80CA308ECA308288/alex_dataset/ecological-assets'
     test_imgs = os.path.join(dataset_path, 'test_jpg')
 
-    model_name = 'efficientnet-b6'#efficientnet-b4
-    n_class=10
-    model=seg_qyl(model_name,n_class).cuda()
-    model= torch.nn.DataParallel(model)
-    checkpoints=torch.load('outputs/efficientnet-b6/ckpt/checkpoint-epoch44.pth')
+    model_name = 'efficientnet-b6'  # efficientnet-b4
+    n_class = 10
+    model = EfficientUNetPlusPlus(model_name, n_class).cuda()
+    model = torch.nn.DataParallel(model)
+
+    # load checkpoint
+    checkpoints = torch.load('outputs/efficientnet-b6/ckpt/checkpoint-epoch44.pth')
     model.load_state_dict(checkpoints['state_dict'])
+
     model.eval()
-    use_demo=False
-    assert_list=[1,2,3,4,5,6,7,8,9,10]
+    use_demo = False
+    assert_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     if use_demo:
-        img_dir='demo/000097.jpg'
-        pred=inference(img_dir)
+        img_dir = 'demo/000097.jpg'
+        pred = inference(img_dir)
         infer_start_time = time.time()
         visualize_result(img_dir, pred)
         #
     else:
-        out_dir='result/results/'
-        if not os.path.exists(out_dir):os.makedirs(out_dir)
+        out_dir = 'result/results/'
+        if not os.path.exists(out_dir): os.makedirs(out_dir)
 
-        test_paths=glob.glob(os.path.join(test_imgs, '*.jpg'))
+        test_paths = glob.glob(os.path.join(test_imgs, '*.jpg'))
         for per_path in tqdm(test_paths):
-            result=inference(per_path)
-            img=Image.fromarray(np.uint8(result))
-            img=img.convert('L')
-            #print(out_path)
-            out_path=os.path.join(out_dir,per_path.split('/')[-1][:-4]+'.png')
+            result = inference(model, per_path)
+            img = Image.fromarray(np.uint8(result))
+            img = img.convert('L')
+            # print(out_path)
+            out_path = os.path.join(out_dir, per_path.split('/')[-1][:-4] + '.png')
             img.save(out_path)
+
+if __name__=="__main__":
+    main()
+
+
 

@@ -15,7 +15,7 @@ import segmentation_models_pytorch as smp
 from torch.cuda.amp import autocast
 
 
-class EfficientUNet(nn.Module):
+class EfficientUNetPlusPlus(nn.Module):
     def __init__(self, model_name, n_class):
         super().__init__()
         self.model = smp.UnetPlusPlus(# UnetPlusPlus

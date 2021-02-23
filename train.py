@@ -32,7 +32,7 @@ from segmentation_models_pytorch.losses import DiceLoss, FocalLoss, SoftCrossEnt
 
 from utils import AverageMeter, second2time, initial_logger, smooth
 
-from model import EfficientUNet
+from model import EfficientUNetPlusPlus
 from dataset import RSCDataset
 from dataset import train_transform, val_transform
 from torch.cuda.amp import autocast
@@ -249,7 +249,7 @@ def main():
          1.],dtype=torch.half)
     model_name = 'efficientnet-b6'  # xception
     n_class = 10
-    model = EfficientUNet(model_name, n_class).cuda()
+    model = EfficientUNetPlusPlus(model_name, n_class).cuda()
     model = torch.nn.DataParallel(model)
     # checkpoints=torch.load('outputs/efficientnet-b6-3729/ckpt/checkpoint-epoch20.pth')
     # model.load_state_dict(checkpoints['state_dict'])
@@ -280,7 +280,7 @@ def main():
     param['milestones'] = [40, 50]
 
     ## gradient accumalate
-    param['accumulation_steps'] = 1
+    param['accumulation_steps'] = 3
     param['model_name'] = model_name  # 模型名称
     param['save_log_dir'] = save_log_dir  # 日志保存路径
     param['save_ckpt_dir'] = save_ckpt_dir  # 权重保存路径

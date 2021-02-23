@@ -1,1 +1,1 @@
-from .efficient_unet import EfficientUNet
+from .efficient_unet import EfficientUNetPlusPlus
