@@ -14,21 +14,25 @@ import numpy as np
 import torch
 import cv2
 import time
-from io import BytesIO
-import base64
 from PIL import Image
-Image.MAX_IMAGE_PIXELS = 1000000000000000
+
 from tqdm import tqdm
 import glob
 import os
-from scipy.io import loadmat
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 import segmentation_models_pytorch as smp
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from utils import colorEncode
 import torch.nn as nn
 from torch.cuda.amp import autocast
+
+from scipy.io import loadmat
+
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+Image.MAX_IMAGE_PIXELS = 1000000000000000
 
 def visualize_result(img_dir, pred):
     #
@@ -77,7 +81,8 @@ def get_infer_transform():
         ToTensorV2(),
     ])
     return transform
-#
+
+
 def inference(img_dir):
     transform=get_infer_transform()
     image = cv2.imread(img_dir, cv2.IMREAD_COLOR)
@@ -93,6 +98,7 @@ def inference(img_dir):
     pred = np.argmax(pred,axis=0)
     return pred+1
 
+
 class seg_qyl(nn.Module):
     def __init__(self, model_name, n_class):
         super().__init__()
@@ -102,18 +108,18 @@ class seg_qyl(nn.Module):
                 in_channels=3,                  # model input channels (1 for grayscale images, 3 for RGB, etc.)
                 classes=n_class,                      # model output channels (number of classes in your dataset)
             )
-    #
+
     @autocast()
     def forward(self, x):
         #with autocast():
         x = self.model(x)
         return x
-#
+
+
 if __name__=="__main__":
 
     dataset_path = '/media/alex/80CA308ECA308288/alex_dataset/ecological-assets'
     test_imgs = os.path.join(dataset_path, 'test_jpg')
-
 
     model_name = 'efficientnet-b6'#efficientnet-b4
     n_class=10

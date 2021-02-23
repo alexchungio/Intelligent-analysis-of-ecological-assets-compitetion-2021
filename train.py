@@ -138,7 +138,7 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
     SoftCrossEntropy_fn = SoftCrossEntropyLoss(smooth_factor=0.1)
     CrossEntropyLoss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
     Lovasz_fn = LovaszLoss(mode='multiclass')
-    criterion = L.JointLoss(first=Lovasz_fn, second=DiceLoss_fn,
+    criterion = L.JointLoss(first=DiceLoss_fn, second=SoftCrossEntropy_fn,
                             first_weight=0.5, second_weight=0.5).cuda()
     logger = initial_logger(
         os.path.join(save_log_dir, time.strftime("%m-%d %H:%M:%S", time.localtime()) + '_' + model_name + '.log'))
@@ -280,7 +280,7 @@ def main():
     param['milestones'] = [40, 50]
 
     ## gradient accumalate
-    param['accumulation_steps'] = 3
+    param['accumulation_steps'] = 1
     param['model_name'] = model_name  # 模型名称
     param['save_log_dir'] = save_log_dir  # 日志保存路径
     param['save_ckpt_dir'] = save_ckpt_dir  # 权重保存路径
