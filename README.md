@@ -32,7 +32,7 @@ zip -r results.zip results
   线上分数 0.3511 （线下验证集 miou 分数下降， 线上分数反而提高了， 可能是因为训练集和测试的数据分布不同导致的）
    
 ### 2020-02-06
-* 更换baseline  efficient+unet
+* 更换baseline  efficient+unet++
   线上分数 0.3712
   
   
@@ -42,8 +42,15 @@ zip -r results.zip results
    
 ### 2020-02-18
 * 增加 re-weight 策略
-  
   不 wrok
+  
+
+### 2020-02-20
+* 增大batch-size
+  使用 gradient accumulate 训练, 克服GPU显存限制
+  batch_size: 6 -> 18
+  线上分数 0.3808
+  
   
 ### trick
 * warmup
@@ -57,6 +64,7 @@ zip -r results.zip results
 * 针对 grass、construction、 bareland 训练二分类模型
 * SWA(Stochastic Weights Averaging)
 
+## TODO
 
 ## Reference
 
