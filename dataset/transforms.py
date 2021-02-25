@@ -10,34 +10,12 @@
 # @ Software   : PyCharm
 #-------------------------------------------------------
 
-import torchvision
-
-
-
-
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#------------------------------------------------------
-# @ File       : transforms.py
-# @ Description:
-# @ Author     : Alex Chung
-# @ Contact    : yonganzhong@outlook.com
-# @ License    : Copyright (c) 2017-2018
-# @ Time       : 2020/11/4 上午11:56
-# @ Software   : PyCharm
-#-------------------------------------------------------
-
-import random
-from PIL import Image, ImageFilter
-from torchvision import transforms
-import albumentations as A
 from torchvision import transforms as T
 
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 __all__ = ['get_transforms', 'get_albu_transform', 'train_transform', 'val_transform']
-
 
 
 train_transform = A.Compose([
@@ -54,13 +32,11 @@ train_transform = A.Compose([
     ToTensorV2(),
 ])
 
-
 val_transform = A.Compose([
     A.Resize(256, 256),
     A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
     ToTensorV2(),
 ])
-
 
 
 def get_albu_transform(image_size):
@@ -116,12 +92,14 @@ def get_test_transform(mean, std, size):
 
 
 def get_transforms(size, mode='test'):
+    """
 
+    :param size:
+    :param mode:
+    :return:
+    """
     assert mode in ['train', 'val', 'test']
-
-
     mean, std = [0.625, 0.448, 0.688], [0.131, 0.177, 0.101]
-
     if mode in ['train']:
         transformations =get_train_transform(mean, std, size)
     else:

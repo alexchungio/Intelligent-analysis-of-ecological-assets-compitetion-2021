@@ -13,18 +13,17 @@ import os
 import os.path as osp
 import time
 import copy
+import random
 import numpy as np
-from PIL import Image
 import matplotlib.pyplot as plt
 from PIL import Image
 from tqdm import tqdm
 
 import torch
 from torch.autograd import Variable
-from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
-from torch.cuda.amp import autocast, GradScaler  # need pytorch>1.6
+from torch.cuda.amp import  autocast, GradScaler  # need pytorch>1.6
 from pytorch_toolbelt import losses as L
 
 from utils.metric import IOUMetric
@@ -35,8 +34,8 @@ from utils import AverageMeter, second2time, initial_logger, smooth
 from model import EfficientUNetPlusPlus
 from dataset import RSCDataset
 from dataset import train_transform, val_transform
-from torch.cuda.amp import autocast
-#
+
+
 import segmentation_models_pytorch as smp
 Image.MAX_IMAGE_PIXELS = 1000000000000000
 
@@ -44,18 +43,37 @@ Image.MAX_IMAGE_PIXELS = 1000000000000000
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 0,1
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
+# set random seed
+use_cuda = True
+seed = 2020
+random.seed(seed)
+torch.manual_seed(seed)
+if use_cuda:
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = True
 
-# 准备数据集
+
+#  dataset
 dataset_path = osp.join('/media/alex/80CA308ECA308288/alex_dataset/ecological-assets', 'split_dataset')
-train_labels_dir= osp.join(dataset_path, 'ann_dir', 'train')
-val_labels_dir=osp.join(dataset_path, 'ann_dir', 'val')
-ann_dir_train_val=osp.join(dataset_path, 'ann_dir', 'train_val')
-train_imgs_dir=osp.join(dataset_path, 'img_dir', 'train')
-val_imgs_dir=osp.join(dataset_path, 'img_dir', 'val')
+train_anns_dir = osp.join(dataset_path, 'ann_dir', 'train')
+val_anns_dir = osp.join(dataset_path, 'ann_dir', 'val')
+train_val_anns_dir = osp.join(dataset_path, 'ann_dir', 'train_val')
+
+train_imgs_dir = osp.join(dataset_path, 'img_dir', 'train')
+val_imgs_dir = osp.join(dataset_path, 'img_dir', 'val')
+train_val_imgs_dir = osp.join(dataset_path, 'img_dir', 'train_val')
 
 
-def eval(model, valid_loader, criterion, epoch, loager):
+def eval(model, valid_loader, criterion, epoch, logger):
+    """
 
+    :param model:
+    :param valid_loader:
+    :param criterion:
+    :param epoch:
+    :param logger:
+    :return:
+    """
     model.eval()
     valid_epoch_loss = AverageMeter()
     valid_iter_loss = AverageMeter()
@@ -78,7 +96,7 @@ def eval(model, valid_loader, criterion, epoch, loager):
             #         epoch, batch_idx, valid_loader_size, batch_idx / valid_loader_size * 100, valid_iter_loss.avg))
         val_loss = valid_iter_loss.avg
         acc, acc_cls, iu, mean_iu, fwavacc = iou.evaluate()
-        loager.info('[val] epoch:{} miou:{:.2f}'.format(epoch, mean_iu))
+        logger.info('[val] epoch:{} miou:{:.2f}'.format(epoch, mean_iu))
 
         return valid_epoch_loss, mean_iu
 
@@ -182,8 +200,12 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
                     scaler.step(optimizer)
                     scaler.update()
                     optimizer.zero_grad()
-
-            scheduler.step(epoch + batch_idx / train_loader_size)
+                    scheduler.step(epoch + batch_idx / train_loader_size)
+            #     scaler.scale(loss).backward()
+            #     scaler.step(optimizer)
+            #     scaler.update()
+            #     optimizer.zero_grad()
+            # scheduler.step(epoch + batch_idx / train_loader_size)
             image_loss = loss.item()
             train_epoch_loss.update(image_loss)
             train_iter_loss.update(image_loss)
@@ -197,7 +219,7 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
 
         # validation
         valid_epoch_loss, mean_iou = eval(model, valid_loader, criterion, epoch, logger)
-        # 保存loss、lr
+        # save loss and lr
         train_loss_total_epochs.append(train_epoch_loss.avg)
         valid_loss_total_epochs.append(valid_epoch_loss.avg)
         epoch_lr.append(optimizer.param_groups[0]['lr'])
@@ -208,7 +230,7 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
             filename = os.path.join(save_ckpt_dir, 'checkpoint-epoch{}.pth'.format(epoch))
             torch.save(state, filename)  # pytorch1.6会压缩模型，低版本无法加载
 
-        # 保存最优模型
+        # save best model
         if mean_iou > best_iou:  # train_loss_per_epoch valid_loss_per_epoch
             state = {'epoch': epoch, 'state_dict': model.state_dict(), 'optimizer': optimizer.state_dict()}
             filename = os.path.join(save_ckpt_dir, 'checkpoint-best.pth')
@@ -217,8 +239,8 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
             best_mode = copy.deepcopy(model)
             logger.info('[save] Best Model saved at epoch:{} ============================='.format(epoch))
         # scheduler.step()
-        # 显示loss
-    # 训练loss曲线
+
+    # show loss curve
     if plot:
         x = [i for i in range(epochs)]
         fig = plt.figure(figsize=(12, 4))
@@ -242,29 +264,18 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
     return best_mode, model
 
 
+
 def main():
+    model_name = 'efficientnet-b6'  # xception
+    n_class = 10
 
     class_weights = torch.tensor(
         [0.25430845, 0.24128766, 0.72660323, 0.57558217, 0.74196072, 0.56340895, 0.76608468, 0.80792181, 0.47695224,
-         1.],dtype=torch.half)
-    model_name = 'efficientnet-b6'  # xception
-    n_class = 10
-    model = EfficientUNetPlusPlus(model_name, n_class).cuda()
-    model = torch.nn.DataParallel(model)
-    # checkpoints=torch.load('outputs/efficientnet-b6-3729/ckpt/checkpoint-epoch20.pth')
-    # model.load_state_dict(checkpoints['state_dict'])
-    # 模型保存路径
-    save_ckpt_dir = os.path.join('./outputs/', model_name, 'ckpt')
-    save_log_dir = os.path.join('./outputs/', model_name)
+         1.],dtype=torch.float32)
 
-    os.makedirs(save_ckpt_dir, exist_ok=True)
-    os.makedirs(save_ckpt_dir, exist_ok=True)
-    train_data = RSCDataset(train_imgs_dir, train_labels_dir, transform=train_transform)
-    valid_data = RSCDataset(val_imgs_dir, val_labels_dir, transform=val_transform)
-
-    # 参数设置
+    # ---------------------------------------parameter------------------------------------------
     param = {}
-
+    param['model_name'] = model_name  # 模型名称
     param['epochs'] = 50  # 训练轮数
     param['batch_size'] = 6  # 批大小
     param['lr'] = 1e-2  # 学习率
@@ -272,27 +283,46 @@ def main():
     param['step_size'] = 5  # 学习率衰减间隔
     param['momentum'] = 0.9  # 动量
     param['weight_decay'] = 5e-4  # 权重衰减
-    param['disp_inter'] = 1  # 显示间隔(epoch)
-    param['save_inter'] = 4  # 保存间隔(epoch)
-    param['iter_inter'] = 50  # 显示迭代间隔(batch)
+    param['accumulation_steps'] = 3  # gradient accumalate
     param['min_inter'] = 10
     param['warmup_epochs'] = 2
     param['milestones'] = [40, 50]
+    param['class_weights'] = class_weights
 
-    ## gradient accumalate
-    param['accumulation_steps'] = 3
-    param['model_name'] = model_name  # 模型名称
-    param['save_log_dir'] = save_log_dir  # 日志保存路径
-    param['save_ckpt_dir'] = save_ckpt_dir  # 权重保存路径
+    # log config
+    param['disp_inter'] = 1  # 显示间隔(epoch)
+    param['save_inter'] = 4  # 保存间隔(epoch)
+    param['iter_inter'] = 50  # 显示迭代间隔(batch)
 
-    # 加载权重路径（继续训练）
-    param['load_ckpt_dir'] = None
+    # save path
+    param['save_log_dir'] = None  # log path
+    param['save_ckpt_dir'] = None  # checkpoint path
 
-    # 训练
+    param['load_ckpt_dir'] = None  # 加载权重路径（继续训练）
+
+    #-----------------------------model---------------------------------------
+    model = EfficientUNetPlusPlus(model_name, n_class).cuda()
+    model = torch.nn.DataParallel(model)
+
+    # -----------------------------model save path-----------------------------
+    save_ckpt_dir = os.path.join('./outputs/', model_name)
+    save_log_dir = os.path.join('./outputs/', model_name)
+    os.makedirs(save_ckpt_dir, exist_ok=True)
+    os.makedirs(save_log_dir, exist_ok=True)
+
+    param['save_log_dir'] = save_log_dir  # log path
+    param['save_ckpt_dir'] = save_ckpt_dir  # checkpoint path
+
+    #-------------------------------- load dataset--------------------------------------------
+    train_data = RSCDataset(train_val_imgs_dir, train_val_anns_dir, transform=train_transform)
+    valid_data = RSCDataset(val_imgs_dir, val_anns_dir, transform=val_transform)
+
+    # training
     best_model, model = train(param, model, train_data, valid_data)
 
     print('Done')
 
 if __name__ == "__main__":
     main()
+
 

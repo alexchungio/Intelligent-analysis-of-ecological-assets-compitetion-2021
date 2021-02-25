@@ -1,19 +1,13 @@
+
 import os
 import cv2
 import logging
 import numpy as np
-
-
-from PIL import Image
-from tqdm import tqdm
 from glob import glob
 from torch.utils.data import Dataset
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
+from dataset import train_transform, val_transform
 
-from dataset.transforms import train_transform, val_transform
 
 class RSCDataset(Dataset):
     def __init__(self, imgs_dir, masks_dir, transform=None):
@@ -58,7 +52,9 @@ class RSCDataset(Dataset):
             'label': mask.long()
         }
 
+
 if __name__ == '__main__':
+
     data_dir = os.path.join('/media/alex/80CA308ECA308288/alex_dataset/ecological-assets', 'split_dataset')
     train_imgs_dir = os.path.join(data_dir, "img_dir/train/")
     train_labels_dir = os.path.join(data_dir, "ann_dir/train/")
