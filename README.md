@@ -103,6 +103,10 @@ zip -r results.zip results
 * 线上分数 0.3808
 
 ### 2020-02-25
+* num_train:num_val = 1 :0.15
+* batch_size: 16
+* epoch 44
+* 线上分数 0.3820
 
   
 ### trick
@@ -125,3 +129,4 @@ zip -r results.zip results
 * <https://github.com/MrGiovanni/UNetPlusPlus>
 * <https://github.com/DLLXW/data-science-competition>
 * <https://github.com/tugstugi/pytorch-saltnet>
+* <https://www.zhihu.com/question/375988016/answer/1698592088>
