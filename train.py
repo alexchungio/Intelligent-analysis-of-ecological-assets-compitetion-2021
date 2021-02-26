@@ -28,12 +28,15 @@ from pytorch_toolbelt import losses as L
 
 from utils.metric import IOUMetric
 from segmentation_models_pytorch.losses import DiceLoss, FocalLoss, SoftCrossEntropyLoss, LovaszLoss
+from torchcontrib.optim import SWA
+from utils import NoamLR
 
-from utils import AverageMeter, second2time, initial_logger, smooth
 
 from model import EfficientUNetPlusPlus
 from dataset import RSCDataset
 from dataset import train_transform, val_transform
+from utils import AverageMeter, second2time, initial_logger, smooth
+
 
 
 import segmentation_models_pytorch as smp
@@ -124,6 +127,7 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
 
     warmup_epochs = param['warmup_epochs']
     milestones = param['milestones']
+    class_weights = param['class_weights']
 
     disp_inter = param['disp_inter']
     save_inter = param['save_inter']
@@ -142,15 +146,18 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
     c, y, x = train_data.__getitem__(0)['image'].shape
     train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True, num_workers=1)
     valid_loader = DataLoader(dataset=valid_data, batch_size=batch_size, shuffle=False, num_workers=1)
-    optimizer = optim.AdamW(model.parameters(), lr=3e-4, weight_decay=weight_decay)
-    # optimizer = optim.SGD(model.parameters(), lr=1e-2, momentum=momentum, weight_decay=weight_decay)
+    # optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=2, eta_min=1e-5,
+    #                                                                  last_epoch=-1)
+
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     # scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=2, eta_min=1e-5,
-                                                                     last_epoch=-1)
+
     # warm_up_with_multistep_lr = lambda \
     #     epoch: epoch / warmup_epochs if epoch <= warmup_epochs else gamma ** len(
     #     [m for m in milestones if m <= epoch])
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warm_up_with_multistep_lr)
+    scheduler = NoamLR(optimizer, warmup_steps=warmup_epochs)
     # criterion = nn.CrossEntropyLoss(reduction='mean').to(device)
     DiceLoss_fn = DiceLoss(mode='multiclass')
     SoftCrossEntropy_fn = SoftCrossEntropyLoss(smooth_factor=0.1)
@@ -168,10 +175,10 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
     best_iou = 0
     best_epoch = 0
     best_mode = copy.deepcopy(model)
-    epoch_start = 0
+    start_epoch = 0
     if load_ckpt_dir is not None:
         ckpt = torch.load(load_ckpt_dir)
-        epoch_start = ckpt['epoch']
+        start_epoch = ckpt['epoch']
         model.load_state_dict(ckpt['state_dict'])
         optimizer.load_state_dict(ckpt['optimizer'])
 
@@ -179,8 +186,8 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
         'Total Epoch:{} Image_size:({}, {}) Training num:{}  Validation num:{}'.format(epochs, x, y, train_data_size,
                                                                                        valid_data_size))
     # execute train
-    for epoch in range(epoch_start, epochs):
-        epoch_start = time.time()
+    for epoch in range(start_epoch, epochs):
+        start_time = time.time()
         # 训练阶段
         model.train()
         train_epoch_loss = AverageMeter()
@@ -210,7 +217,7 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
             train_epoch_loss.update(image_loss)
             train_iter_loss.update(image_loss)
             if batch_idx % iter_inter == 0:
-                spend_time = time.time() - epoch_start
+                spend_time = time.time() - start_time
                 logger.info('[train] epoch:{} iter:{}/{} {:.2f}% lr:{:.6f} loss:{:.6f} ETA:{}min'.format(
                     epoch, batch_idx, train_loader_size, batch_idx / train_loader_size * 100,
                     optimizer.param_groups[-1]['lr'],
@@ -225,7 +232,7 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
         epoch_lr.append(optimizer.param_groups[0]['lr'])
 
         # save checkpoint
-        if epoch % save_inter == 0 and epoch > min_inter:
+        if (epoch + 1) % save_inter == 0 and epoch > min_inter:
             state = {'epoch': epoch, 'state_dict': model.state_dict(), 'optimizer': optimizer.state_dict()}
             filename = os.path.join(save_ckpt_dir, 'checkpoint-epoch{}.pth'.format(epoch))
             torch.save(state, filename)  # pytorch1.6会压缩模型，低版本无法加载
@@ -264,7 +271,6 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
     return best_mode, model
 
 
-
 def main():
     model_name = 'efficientnet-b6'  # xception
     n_class = 10
@@ -276,15 +282,15 @@ def main():
     # ---------------------------------------parameter------------------------------------------
     param = {}
     param['model_name'] = model_name  # 模型名称
-    param['epochs'] = 50  # 训练轮数
-    param['batch_size'] = 6  # 批大小
-    param['lr'] = 1e-2  # 学习率
+    param['epochs'] = 80  # 训练轮数
+    param['batch_size'] = 8  # 批大小
+    # param['lr'] = 3e-4  # AdamW
+    param['lr'] = 0.01
     param['gamma'] = 0.2  # 学习率衰减系数
     param['step_size'] = 5  # 学习率衰减间隔
     param['momentum'] = 0.9  # 动量
     param['weight_decay'] = 5e-4  # 权重衰减
-    param['accumulation_steps'] = 3  # gradient accumalate
-    param['min_inter'] = 10
+    param['accumulation_steps'] = 2  # gradient accumulate
     param['warmup_epochs'] = 2
     param['milestones'] = [40, 50]
     param['class_weights'] = class_weights
@@ -296,6 +302,7 @@ def main():
 
     # save path
     param['save_log_dir'] = None  # log path
+    param['min_inter'] = 10  # minimize epoch to save checkpoint
     param['save_ckpt_dir'] = None  # checkpoint path
 
     param['load_ckpt_dir'] = None  # 加载权重路径（继续训练）
@@ -305,7 +312,7 @@ def main():
     model = torch.nn.DataParallel(model)
 
     # -----------------------------model save path-----------------------------
-    save_ckpt_dir = os.path.join('./outputs/', model_name)
+    save_ckpt_dir = os.path.join('./outputs/', model_name, 'ckpt')
     save_log_dir = os.path.join('./outputs/', model_name)
     os.makedirs(save_ckpt_dir, exist_ok=True)
     os.makedirs(save_log_dir, exist_ok=True)

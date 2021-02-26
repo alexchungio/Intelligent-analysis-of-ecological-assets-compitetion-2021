@@ -55,7 +55,7 @@ if __name__ == "__main__":
     model = resnet18(num_classes=10)
     optimizer = optim.SGD(model.parameters(), lr=base_lr, momentum=0.9, nesterov=True)
 
-    scheduler = NoamLR(optimizer=optimizer, warmup_steps=1)
+    scheduler = NoamLR(optimizer=optimizer, warmup_steps=warmup_epochs)
     lrs = []
     step = 1
     for epoch in range(epochs):
