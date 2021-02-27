@@ -111,7 +111,7 @@ def main():
     model = torch.nn.DataParallel(model)
 
     # load checkpoint
-    checkpoints = torch.load('outputs/efficientnet-b6/ckpt/checkpoint-epoch44.pth')
+    checkpoints = torch.load('outputs/efficientnet-b6/ckpt/checkpoint-epoch79.pth')
     model.load_state_dict(checkpoints['state_dict'])
 
     model.eval()
@@ -119,7 +119,7 @@ def main():
     assert_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     if use_demo:
         img_dir = 'demo/000097.jpg'
-        pred = inference(img_dir)
+        pred = inference(model, img_dir)
         infer_start_time = time.time()
         visualize_result(img_dir, pred)
         #

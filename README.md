@@ -45,6 +45,7 @@ zip -r results.zip results
 * scheduler: warmUpConsineScheduler
 * batch_size: 6
 * num_train:num_val = 0.85:0.15
+* lr: 3e-4
 * 线上分数 0.3712
    
 ### 2020-02-09
@@ -108,7 +109,14 @@ zip -r results.zip results
 * epoch 44
 * 线上分数 0.3820
 
-  
+### 2020-02-26
+* num_train:num_val = 1 :0.15
+* batch_size: 16
+* optimize: SGDM
+* scheduler: NoamLR
+* lr: 0.01
+* epoch 80
+ 
 ### trick
 * warmup
 * re-weight

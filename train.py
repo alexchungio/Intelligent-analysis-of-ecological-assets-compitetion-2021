@@ -70,11 +70,11 @@ train_val_imgs_dir = osp.join(dataset_path, 'img_dir', 'train_val')
 def eval(model, valid_loader, criterion, epoch, logger):
     """
 
-    :param model:
-    :param valid_loader:
-    :param criterion:
-    :param epoch:
-    :param logger:
+    :config model:
+    :config valid_loader:
+    :config criterion:
+    :config epoch:
+    :config logger:
     :return:
     """
     model.eval()
@@ -104,40 +104,32 @@ def eval(model, valid_loader, criterion, epoch, logger):
         return valid_epoch_loss, mean_iu
 
 
-def train(param, model, train_data, valid_data, class_weights=None, plot=False, device='cuda'):
+def train(config, model, train_data, valid_data, plot=False, device='cuda'):
     """
 
-    :param param:
-    :param model:
-    :param train_data:
-    :param valid_data:
-    :param plot:
-    :param device:
+    :config config:
+    :config model:
+    :config train_data:
+    :config valid_data:
+    :config plot:
+    :config device:
     :return:
     """
     # 初始化参数
-    model_name = param['model_name']
-    epochs = param['epochs']
-    batch_size = param['batch_size']
-    lr = param['lr']
-    gamma = param['gamma']
-    step_size = param['step_size']
-    momentum = param['momentum']
-    weight_decay = param['weight_decay']
+    model_name = config['model_name']
+    epochs = config['epochs']
+    batch_size = config['batch_size']
 
-    warmup_epochs = param['warmup_epochs']
-    milestones = param['milestones']
-    class_weights = param['class_weights']
+    class_weights = config['class_weights']
+    disp_inter = config['disp_inter']
+    save_inter = config['save_inter']
+    min_inter = config['min_inter']
+    iter_inter = config['iter_inter']
 
-    disp_inter = param['disp_inter']
-    save_inter = param['save_inter']
-    min_inter = param['min_inter']
-    iter_inter = param['iter_inter']
-
-    save_log_dir = param['save_log_dir']
-    save_ckpt_dir = param['save_ckpt_dir']
-    load_ckpt_dir = param['load_ckpt_dir']
-    accumulation_steps = param['accumulation_steps']
+    save_log_dir = config['save_log_dir']
+    save_ckpt_dir = config['save_ckpt_dir']
+    load_ckpt_dir = config['load_ckpt_dir']
+    accumulation_steps = config['accumulation_steps']
     # automatic mixed precision
     scaler = GradScaler()
     # 网络参数
@@ -146,18 +138,33 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
     c, y, x = train_data.__getitem__(0)['image'].shape
     train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True, num_workers=1)
     valid_loader = DataLoader(dataset=valid_data, batch_size=batch_size, shuffle=False, num_workers=1)
-    # optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=2, eta_min=1e-5,
-    #                                                                  last_epoch=-1)
-
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
-    # scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
+    #
+    if config['optimizer'].lower() == 'adamw':
+        optimizer = optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
+    elif config['optimizer'].lower() == 'sgd':
+        optimizer = optim.SGD(model.parameters(), lr=config['lr'], momentum=config['momentum'],
+                              weight_decay=config['weight_decay'])
 
     # warm_up_with_multistep_lr = lambda \
     #     epoch: epoch / warmup_epochs if epoch <= warmup_epochs else gamma ** len(
     #     [m for m in milestones if m <= epoch])
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warm_up_with_multistep_lr)
-    scheduler = NoamLR(optimizer, warmup_steps=warmup_epochs)
+    if config['scheduler'] == 'CosineAnnealingLR':
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['epochs'], eta_min=config['min_lr'])
+    elif config['scheduler'] == 'CosineAnnealingWarmRestarts':
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=2, T_mult=2, eta_min=1e-5,
+                                                                     last_epoch=-1)
+    elif config['scheduler'] == 'ReduceLROnPlateau':
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=config['factor'], patience=config['patience'],
+                                                   verbose=1, min_lr=config['min_lr'])
+    elif config['scheduler'] == 'MultiStepLR':
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(e) for e in config['milestones'].split(',')],
+                                             gamma=config['gamma'])
+    elif config['scheduler'] == 'NoamLR':
+        scheduler = NoamLR(optimizer, warmup_steps=config['warmup_steps'])
+    else:
+        raise NotImplementedError
+
     # criterion = nn.CrossEntropyLoss(reduction='mean').to(device)
     DiceLoss_fn = DiceLoss(mode='multiclass')
     SoftCrossEntropy_fn = SoftCrossEntropyLoss(smooth_factor=0.1)
@@ -170,8 +177,8 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
 
     # 主循环
     train_loss_total_epochs, valid_loss_total_epochs, epoch_lr = [], [], []
-    train_loader_size = train_loader.__len__()
-    valid_loader_size = valid_loader.__len__()
+    train_loader_size = len(train_loader)
+    valid_loader_size = len(valid_loader)
     best_iou = 0
     best_epoch = 0
     best_mode = copy.deepcopy(model)
@@ -220,8 +227,8 @@ def train(param, model, train_data, valid_data, class_weights=None, plot=False, 
                 spend_time = time.time() - start_time
                 logger.info('[train] epoch:{} iter:{}/{} {:.2f}% lr:{:.6f} loss:{:.6f} ETA:{}min'.format(
                     epoch, batch_idx, train_loader_size, batch_idx / train_loader_size * 100,
-                    optimizer.param_groups[-1]['lr'],
-                    train_iter_loss.avg, spend_time / (batch_idx + 1) * train_loader_size // 60 - spend_time // 60))
+                    optimizer.param_groups[-1]['lr'], train_iter_loss.avg,
+                    spend_time / (batch_idx + 1) * train_loader_size // 60 - spend_time // 60))
                 train_iter_loss.reset()
 
         # validation
@@ -279,33 +286,36 @@ def main():
         [0.25430845, 0.24128766, 0.72660323, 0.57558217, 0.74196072, 0.56340895, 0.76608468, 0.80792181, 0.47695224,
          1.],dtype=torch.float32)
 
-    # ---------------------------------------parameter------------------------------------------
-    param = {}
-    param['model_name'] = model_name  # 模型名称
-    param['epochs'] = 80  # 训练轮数
-    param['batch_size'] = 8  # 批大小
-    # param['lr'] = 3e-4  # AdamW
-    param['lr'] = 0.01
-    param['gamma'] = 0.2  # 学习率衰减系数
-    param['step_size'] = 5  # 学习率衰减间隔
-    param['momentum'] = 0.9  # 动量
-    param['weight_decay'] = 5e-4  # 权重衰减
-    param['accumulation_steps'] = 2  # gradient accumulate
-    param['warmup_epochs'] = 2
-    param['milestones'] = [40, 50]
-    param['class_weights'] = class_weights
+    # ---------------------------------------config------------------------------------------
+    config = {}
+    config['model_name'] = model_name  # 模型名称
+    config['epochs'] = 80  # 训练轮数
+    config['batch_size'] = 8  # 批大小
+    # config['lr'] = 3e-4  # AdamW
+
+    config['optimizer'] = 'sgd'
+    config['lr'] = 2e-3
+    config['gamma'] = 0.1  # 学习率衰减系数
+    config['momentum'] = 0.9  # 动量
+    config['weight_decay'] = 1e-4  # 权重衰减
+
+    config['scheduler'] = 'CosineAnnealingWarmRestarts'
+    config['accumulation_steps'] = 2  # gradient accumulate
+    config['warmup_steps'] = 2
+    config['milestones'] = [40, 50]
+    config['class_weights'] = class_weights
 
     # log config
-    param['disp_inter'] = 1  # 显示间隔(epoch)
-    param['save_inter'] = 4  # 保存间隔(epoch)
-    param['iter_inter'] = 50  # 显示迭代间隔(batch)
+    config['disp_inter'] = 1  # 显示间隔(epoch)
+    config['save_inter'] = 4  # 保存间隔(epoch)
+    config['iter_inter'] = 50  # 显示迭代间隔(batch)
 
     # save path
-    param['save_log_dir'] = None  # log path
-    param['min_inter'] = 10  # minimize epoch to save checkpoint
-    param['save_ckpt_dir'] = None  # checkpoint path
+    config['save_log_dir'] = None  # log path
+    config['min_inter'] = 10  # minimize epoch to save checkpoint
+    config['save_ckpt_dir'] = None  # checkpoint path
 
-    param['load_ckpt_dir'] = None  # 加载权重路径（继续训练）
+    config['load_ckpt_dir'] = None  # 加载权重路径（继续训练）
 
     #-----------------------------model---------------------------------------
     model = EfficientUNetPlusPlus(model_name, n_class).cuda()
@@ -317,15 +327,15 @@ def main():
     os.makedirs(save_ckpt_dir, exist_ok=True)
     os.makedirs(save_log_dir, exist_ok=True)
 
-    param['save_log_dir'] = save_log_dir  # log path
-    param['save_ckpt_dir'] = save_ckpt_dir  # checkpoint path
+    config['save_log_dir'] = save_log_dir  # log path
+    config['save_ckpt_dir'] = save_ckpt_dir  # checkpoint path
 
     #-------------------------------- load dataset--------------------------------------------
     train_data = RSCDataset(train_val_imgs_dir, train_val_anns_dir, transform=train_transform)
     valid_data = RSCDataset(val_imgs_dir, val_anns_dir, transform=val_transform)
 
     # training
-    best_model, model = train(param, model, train_data, valid_data)
+    best_model, model = train(config, model, train_data, valid_data)
 
     print('Done')
 
