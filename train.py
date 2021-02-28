@@ -31,17 +31,12 @@ from segmentation_models_pytorch.losses import DiceLoss, FocalLoss, SoftCrossEnt
 from torchcontrib.optim import SWA
 from utils import NoamLR
 
-
 from model import EfficientUNetPlusPlus
 from dataset import RSCDataset
 from dataset import train_transform, val_transform
 from utils import AverageMeter, second2time, initial_logger, smooth
 
-
-
-import segmentation_models_pytorch as smp
 Image.MAX_IMAGE_PIXELS = 1000000000000000
-
 #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 0,1
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -144,6 +139,9 @@ def train(config, model, train_data, valid_data, plot=False, device='cuda'):
     elif config['optimizer'].lower() == 'sgd':
         optimizer = optim.SGD(model.parameters(), lr=config['lr'], momentum=config['momentum'],
                               weight_decay=config['weight_decay'])
+    # SWA
+    if config['swa']:
+        swa_opt = SWA(optimizer, swa_start=config['swa_start'], swa_freq=config['swa_freq'], swa_lr=config['swa_lr'])
 
     # warm_up_with_multistep_lr = lambda \
     #     epoch: epoch / warmup_epochs if epoch <= warmup_epochs else gamma ** len(
@@ -152,7 +150,7 @@ def train(config, model, train_data, valid_data, plot=False, device='cuda'):
     if config['scheduler'] == 'CosineAnnealingLR':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['epochs'], eta_min=config['min_lr'])
     elif config['scheduler'] == 'CosineAnnealingWarmRestarts':
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=2, T_mult=2, eta_min=1e-5,
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=2, eta_min=1e-5,
                                                                      last_epoch=-1)
     elif config['scheduler'] == 'ReduceLROnPlateau':
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=config['factor'], patience=config['patience'],
@@ -170,8 +168,9 @@ def train(config, model, train_data, valid_data, plot=False, device='cuda'):
     SoftCrossEntropy_fn = SoftCrossEntropyLoss(smooth_factor=0.1)
     CrossEntropyLoss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
     Lovasz_fn = LovaszLoss(mode='multiclass')
-    criterion = L.JointLoss(first=DiceLoss_fn, second=SoftCrossEntropy_fn,
+    criterion = L.JointLoss(first=DiceLoss_fn, second=CrossEntropyLoss_fn,
                             first_weight=0.5, second_weight=0.5).cuda()
+
     logger = initial_logger(
         os.path.join(save_log_dir, time.strftime("%m-%d %H:%M:%S", time.localtime()) + '_' + model_name + '.log'))
 
@@ -289,21 +288,23 @@ def main():
     # ---------------------------------------config------------------------------------------
     config = {}
     config['model_name'] = model_name  # 模型名称
-    config['epochs'] = 80  # 训练轮数
+    config['epochs'] = 92  # 训练轮数
     config['batch_size'] = 8  # 批大小
     # config['lr'] = 3e-4  # AdamW
-
-    config['optimizer'] = 'sgd'
-    config['lr'] = 2e-3
+    config['optimizer'] = 'adamw'
+    config['lr'] = 3e-4
     config['gamma'] = 0.1  # 学习率衰减系数
     config['momentum'] = 0.9  # 动量
-    config['weight_decay'] = 1e-4  # 权重衰减
+    config['weight_decay'] = 5e-4  # 权重衰减
+
+    config['swa'] = False
 
     config['scheduler'] = 'CosineAnnealingWarmRestarts'
     config['accumulation_steps'] = 2  # gradient accumulate
     config['warmup_steps'] = 2
     config['milestones'] = [40, 50]
     config['class_weights'] = class_weights
+
 
     # log config
     config['disp_inter'] = 1  # 显示间隔(epoch)
